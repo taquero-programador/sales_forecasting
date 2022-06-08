@@ -167,19 +167,14 @@ class Forecasting(object):
 		if self.filters.based_on_document == 'Sales Invoice':
 			filters["return_reason"] = ("!=","Acuerdo efectivo")
 
-		date_field_filters = " OR ".join([ "s.{0} BETWEEN '{1}' AND '{2}'".format("{date_field}",d.from_date,d.to_date) for d in self.period_list])
-		date_field_filters = date_field_filters.format(date_field=self.date_field)
-
-		self.entries = frappe.db.sql("""
-			select {entity_field}, s.{value_field}, s.{date_field}
-			from `tab{doctype}` s where s.docstatus = 1 and s.company = %(company)s and ({date_field_filters})
-		"""
-		.format(entity_field=entity_field, date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document, date_field_filters=date_field_filters),
-		filters, as_dict=1)
+		self.entries = frappe.get_all(self.filters.based_on_document,
+		fields=[entity, entity_field, value_field, self.date_field])
 
 		self.entity_names = {}
 		for d in self.entries:
+			print(len(d))
 			self.entity_names.setdefault(d.entity, d.entity_name)
+		
 
 	def get_sales_transactions_based_on_items(self):
 
