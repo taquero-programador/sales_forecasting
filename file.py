@@ -1,429 +1,253 @@
-# Copyright (c) 2013, Frappe Technologies Pvt. Ltd. and contributors
-# For license information, please see license.txt
+// Copyright (c) 2016, Frappe Technologies Pvt. Ltd. and contributors
+// For license information, please see license.txt
+/* eslint-disable */
 
-import frappe
-from frappe import _, scrub
-from frappe.utils import add_to_date, add_days, add_years, cint, flt, getdate
+frappe.query_reports["Sales Forecasting"] = {
+	"filters": [
+		{
+			fieldname: "tree_type",
+			label: __("Tree Type"),
+			fieldtype: "Select",
+			options: ["Customer Group","Customer","Item Group","Item","Territory","Order Type"],
+			default: "Item Group",
+			reqd: 1,
+			on_change: function() {
+				frappe.query_reports['Sales Forecasting'].drilldown({});
+			}
+		},
+		{
+			fieldname: "based_on_document",
+			label: __("based_on"),
+			fieldtype: "Select",
+			options: ["Sales Order","Delivery Note","Sales Invoice"],
+			default: "Sales Invoice",
+			reqd: 1
+		},
+		{
+			fieldname: "based_on_field",
+			label: __("Value Or Qty"),
+			fieldtype: "Select",
+			options: [
+				{ "value": "Value", "label": __("Value") },
+				{ "value": "Quantity", "label": __("Quantity") },
+			],
+			default: "Value",
+			reqd: 1
+		},
+		{
+			fieldname: "from_date",
+			label: __("From Date"),
+			fieldtype: "Date",
+			default: frappe.defaults.get_user_default("year_start_date"),
+			reqd: 1
+		},
+		{
+			fieldname:"to_date",
+			label: __("To Date"),
+			fieldtype: "Date",
+			default: frappe.defaults.get_user_default("year_end_date"),
+			reqd: 1
+		},
+		{
+			fieldname: "company",
+			label: __("Company"),
+			fieldtype: "Link",
+			options: "Company",
+			default: frappe.defaults.get_user_default("Company"),
+			reqd: 1
+		},
+		{
+			fieldname: "periodicity",
+			label: __("Range"),
+			fieldtype: "Select",
+			options: [
+				{ "value": "Weekly", "label": __("Weekly") },
+				{ "value": "Monthly", "label": __("Monthly") },
+				{ "value": "Quarterly", "label": __("Quarterly") },
+        { "value": "Half-Yearly", "label": __("Half-Yearly") },
+        { "value": "Yearly", "label": __("Yearly") }
+			],
+			default: "Yearly",
+			reqd: 1
+		},
+		{
+      "fieldname":"no_of_years",
+      "label": __("Based On Data ( in years )"),
+      "fieldtype": "Select",
+      "options": [3, 6, 9],
+      "default": 3,
+      "reqd": 1
+    },
+		{
+      "label": __("Customer Group"),
+      "fieldname": "customer_group",
+      "fieldtype": "Link",
+      "options": "Customer Group",
+      "default": "",
+      "width": 300,
+      "read_only": 1,
+      on_change: function() {
+          let customer_group = frappe.query_report.get_filter_value('customer_group');
 
-import erpnext
-#from erpnext.accounts.report.financial_statements import get_period_list
-from valsa.selling_reports.utils import get_period_list
-from erpnext.stock.doctype.warehouse.warehouse import get_child_warehouses
-from six import iteritems
-from erpnext.accounts.utils import get_fiscal_year
+          frappe.query_report.refresh();
+      }
+    },
+		{
+      "label": __("Customer"),
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "options": "Customer",
+      "default": "",
+      "width": 300,
+      "read_only": 1,
+      on_change: function() {
+          let customer = frappe.query_report.get_filter_value('customer');
+
+          frappe.query_report.refresh();
+      }
+    },
+    {
+      "label": __("Back"),
+      "fieldname": "back",
+      "fieldtype": "Button",
+      "onclick": function() { frappe.query_reports['Sales Forecasting'].drilldown({});}
+    }
+	],
+	"formatter": function(value, row, column, data, default_formatter) {
+		if (data && column.fieldname == "entity" && column.options=="Customer Group") {
+			value = data.entity || value;
+      column.link_onclick =
+      "frappe.query_reports['Sales Forecasting'].drilldown(" + JSON.stringify({'by':'customer_group','value':value}) + ")";
+      column.is_tree = false;
+    }
+    if (data && column.fieldname=="entity" && column.options=="Customer") {
+			value = data.entity || value;
+      column.link_onclick =
+      "frappe.query_reports['Sales Forecasting'].drilldown(" + JSON.stringify({'by':'customer','value':value}) + ")";
+      column.is_tree = false;
+    }
+
+    value = default_formatter(value, row, column, data);
+
+    if (["Currency","Int","Percent"].includes(column.fieldtype) && data && data[column.fieldname] < 0) {
+			$value = $(`${value}`);
+      $value.addClass("text-danger");
+      value = $value.wrap("<span></span>").parent().html();
+    }
+
+    return value;
+  },
+	onload: function(report) {
+      let customer_group = frappe.query_report.get_filter_value('customer_group');
+			let customer = frappe.query_report.get_filter_value('customer');
+      if (!customer_group && !customer) {
+				frappe.query_report.toggle_filter_display('customer_group', true);
+				frappe.query_report.toggle_filter_display('customer', true);
+        frappe.query_report.toggle_filter_display('back', true);
+      }
+  },
+	drilldown: function(data) {
+		if (data.by && ['customer_group','customer'].includes(data.by)) {
+			if (data.by == "customer_group") {
+				if (data.value) {
+					frappe.query_report.set_filter_value({'customer_group': data.value});
+					frappe.query_report.toggle_filter_display('customer_group', false);
+					frappe.query_report.toggle_filter_display('back', false);
+				} else {
+					frappe.query_report.set_filter_value({'customer_group': ""});
+					frappe.query_report.toggle_filter_display('customer_group', true);
+					frappe.query_report.toggle_filter_display('back', true);
+				}
+			} else if (data.by == "customer") {
+        if (data.value) {
+          frappe.query_report.set_filter_value({'customer': data.value});
+					frappe.query_report.toggle_filter_display('customer', false);
+          frappe.query_report.toggle_filter_display('back', false);
+        } else {
+          frappe.query_report.set_filter_value({'customer': ""});
+					frappe.query_report.toggle_filter_display('customer', true);
+          frappe.query_report.toggle_filter_display('back', true);
+        }
+			}
+		} else {
+			frappe.query_report.set_filter_value({'customer': ""});
+			frappe.query_report.set_filter_value({'customer_group': ""});
+			frappe.query_report.toggle_filter_display('customer', true);
+			frappe.query_report.toggle_filter_display('customer_group', true);
+			frappe.query_report.toggle_filter_display('back', true);
+		}
+  },
+	after_datatable_render: function(datatable_obj) {
+		//$(datatable_obj.wrapper).find(".dt-row-0").find('input[type=checkbox]').click();
+	},
+	get_datatable_options(options) {
+		return Object.assign(options, {
+			checkboxColumn: true,
+			events: {
+				onCheckRow: function(data) {
+					row_name = data[2].content;
+					length = data.length;
+
+					var tree_type = frappe.query_report.filters[0].value;
+
+					if(tree_type == "Customer") {
+						row_values = data.slice(4,length-1).map(function (column) {
+							return column.content;
+						})
+					} else if (tree_type == "Item") {
+						row_values = data.slice(5,length-1).map(function (column) {
+							return column.content;
+						})
+					}
+					else {
+						row_values = data.slice(3,length-1).map(function (column) {
+							return column.content;
+						})
+					}
+
+					entry = {
+						'name':row_name,
+						'values':row_values
+					}
+
+					let raw_data = frappe.query_report.chart.data;
+					let new_datasets = raw_data.datasets;
+
+					var found = false;
+
+					for(var i=0; i < new_datasets.length;i++){
+						if(new_datasets[i].name == row_name){
+							found = true;
+							new_datasets.splice(i,1);
+							break;
+						}
+					}
+
+					if(!found){
+						new_datasets.push(entry);
+					}
+
+					let new_data = {
+						labels: raw_data.labels,
+						datasets: new_datasets
+					}
+
+					setTimeout(() => {
+						try {
+							frappe.query_report.chart.update(new_data);
+						} catch (error) {
+							console.log(error);
+						}
+					}, 500)
 
 
+					setTimeout(() => {
+						frappe.query_report.chart.draw(true);
+					}, 1000)
 
-def execute(filters=None):
-	return Forecasting(filters).run()
-	#return ForecastingReport(filters).execute_report()
-
-class Forecasting(object):
-	def __init__(self, filters=None):
-		self.filters = frappe._dict(filters or {})
-		self.date_field = 'transaction_date' \
-			if self.filters.based_on_document in ['Sales Order', 'Purchase Order'] else 'posting_date'
-		self.months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-		self.get_period_date_ranges()
-
-	def run(self):
-		self.prepare_periodical_data()
-		self.get_columns()
-		self.get_data()
-		self.get_chart_data()
-
-		# Skipping total row for tree-view reports
-		skip_total_row = 0
-
-		if self.filters.tree_type in ["Supplier Group", "Item Group", "Customer Group", "Territory"]:
-			skip_total_row = 1
-
-		if self.filters.tree_type == "Customer Group" and self.filters.get("customer_group",None):
-			skip_total_row = 0
-
-		return self.columns, self.data, None, self.chart, None, skip_total_row
-
-	def prepare_periodical_data(self):
-		self.period_wise_data = {}
-
-		from_date = add_years(self.filters.from_date, cint(self.filters.no_of_years) * -1)
-		self.period_list = get_period_list(
-			from_date,
-			self.filters.to_date,
-			from_date,
-			self.filters.to_date,
-			"Date Range",
-			self.filters.periodicity,
-			ignore_fiscal_year=True,
-		)
-
-	def get_columns(self):
-		self.columns = [{
-				"label": _("Item Code") if self.filters.tree_type in ["Customer Group","Customer"] and (self.filters.get("customer_group",None) or self.filters.get("customer",None)) else _(self.filters.tree_type + " ID"),
-				"options": self.filters.tree_type if self.filters.tree_type != "Order Type" else "",
-				"fieldname": "entity",
-				"fieldtype": "Link" if self.filters.tree_type != "Order Type" else "Data",
-				"width": 140 if self.filters.tree_type != "Order Type" else 200
-			}]
-		if self.filters.tree_type in ["Customer", "Supplier", "Item"] or (self.filters.tree_type == "Customer Group" and self.filters.get("customer_group",None)):
-			self.columns.append({
-				"label":  _("Item Name") if self.filters.tree_type in ["Customer Group","Customer"] and (self.filters.get("customer_group",None) or self.filters.get("customer",None)) else _(self.filters.tree_type + " Name"),
-				"fieldname": "entity_name",
-				"fieldtype": "Data",
-				"width": 140
-			})
-
-		if self.filters.tree_type == "Item":
-			self.columns.append({
-				"label": _("UOM"),
-				"fieldname": 'stock_uom',
-				"fieldtype": "Link",
-				"options": "UOM",
-				"width": 100
-			})
-
-		for end_date in self.periodic_daterange:
-			period = self.get_period(end_date)
-			self.columns.append({
-				"label": _(period),
-				"fieldname": scrub(period),
-				"fieldtype": "Float",
-				"width": 120
-			})
-
-		self.columns.append({
-			"label": _("Total"),
-			"fieldname": "total",
-			"fieldtype": "Float",
-			"width": 120
+					frappe.query_report.raw_chart_data = new_data;
+				},
+			}
 		})
-
-	def get_data(self):
-		if self.filters.tree_type in ["Customer", "Supplier"]:
-			if self.filters.customer:
-				self.get_sales_transactions_based_on_items()
-				self.get_rows()
-			else:
-				self.get_sales_transactions_based_on_customers_or_suppliers()
-				self.get_rows()
-
-		elif self.filters.tree_type == 'Item':
-			self.get_sales_transactions_based_on_items()
-			self.get_rows()
-
-		elif self.filters.tree_type in ["Customer Group", "Supplier Group", "Territory"]:
-			if self.filters.customer_group:
-				self.get_sales_transactions_based_on_items()
-				self.get_rows()
-			else:
-				self.get_sales_transactions_based_on_customer_or_territory_group()
-				self.get_rows_by_group()
-
-		elif self.filters.tree_type == 'Item Group':
-			self.get_sales_transactions_based_on_item_group()
-			self.get_rows_by_group()
-
-		elif self.filters.tree_type == "Order Type":
-			if self.filters.based_on_document != "Sales Order":
-				self.data = []
-				return
-			self.get_sales_transactions_based_on_order_type()
-			self.get_rows_by_group()
-
-	def get_sales_transactions_based_on_order_type(self):
-		if self.filters["based_on_field"] == 'Value':
-			value_field = "base_net_total"
-		else:
-			value_field = "total_qty"
-
-		self.entries = frappe.db.sql(""" select s.order_type as entity, s.{value_field} as value_field, s.{date_field}
-			from `tab{doctype}` s where s.docstatus = 1 and s.company = %s and s.{date_field} between %s and %s
-			and ifnull(s.order_type, '') != '' order by s.order_type
-		"""
-		.format(date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document),
-		(self.filters.company, self.filters.from_date, self.filters.to_date), as_dict=1)
-
-		self.get_teams()
-
-	def get_sales_transactions_based_on_customers_or_suppliers(self):
-		if self.filters["based_on_field"] == 'Value':
-			value_field = "base_net_total as value_field"
-		else:
-			value_field = "total_qty as value_field"
-
-		if self.filters.tree_type == 'Customer':
-			entity = "customer as entity"
-			entity_field = "customer_name as entity_name"
-		else:
-			entity = "supplier as entity"
-			entity_field = "supplier_name as entity_name"
-
-		filters = {
-			"docstatus": 1,
-			"company": self.filters.company,
-			self.date_field: ('between', [self.filters.from_date, self.filters.to_date])
-		}
-
-		if self.filters.based_on_document == 'Sales Invoice':
-			filters["return_reason"] = ("!=","Acuerdo efectivo")
-
-		self.entries = frappe.get_all(self.filters.based_on_document,
-		fields=[entity, entity_field, value_field, self.date_field])
-
-		self.entity_names = {}
-		for d in self.entries:
-			print(len(d))
-			self.entity_names.setdefault(d.entity, d.entity_name)
-		
-
-	def get_sales_transactions_based_on_items(self):
-
-		if self.filters["based_on_field"] == 'Value':
-			value_field = 'base_amount'
-		else:
-			value_field = 'stock_qty'
-
-		conditions = ""
-		if self.filters.get("customer_group",None):
-			lft,rgt = frappe.get_value("Customer Group",self.filters.get("customer_group",None),['lft','rgt'])
-			conditions = "AND s.customer IN (SELECT name from `tabCustomer` WHERE customer_group IN (SELECT name from `tabCustomer Group` where lft>={0} and rgt<={1}))".format(lft,rgt)
-
-		if self.filters.get("customer",None):
-			conditions += " AND s.customer = '{0}'".format(self.filters.get("customer",None))
-
-		self.entries = frappe.db.sql("""
-			select i.item_code as entity, i.item_name as entity_name, i.stock_uom, i.{value_field} as value_field, s.{date_field}
-			from `tab{doctype} Item` i , `tab{doctype}` s
-			where s.name = i.parent and i.docstatus = 1 and s.company = %s {conditions}
-			and s.{date_field} between %s and %s
-		"""
-		.format(date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document, conditions=conditions),
-		(self.filters.company, self.filters.from_date, self.filters.to_date), as_dict=1)
-
-		self.entity_names = {}
-		for d in self.entries:
-			self.entity_names.setdefault(d.entity, d.entity_name)
-
-	def get_sales_transactions_based_on_customer_or_territory_group(self):
-		if self.filters["based_on_field"] == 'Value':
-			value_field = "base_net_total as value_field"
-		else:
-			value_field = "total_qty as value_field"
-
-		if self.filters.tree_type == 'Customer Group':
-			entity_field = 'customer_group as entity'
-		elif self.filters.tree_type == 'Supplier Group':
-			entity_field = "supplier as entity"
-			self.get_supplier_parent_child_map()
-		else:
-			entity_field = "territory as entity"
-
-		filters = {
-			"docstatus": 1,
-			"company": self.filters.company,
-			self.date_field: ('between', [self.filters.from_date, self.filters.to_date])
-		}
-
-		if self.filters.based_on_document == 'Sales Invoice':
-			filters["return_reason"] = ("!=","Acuerdo efectivo")
-
-		date_field_filters = " OR ".join([ "s.{0} BETWEEN '{1}' AND '{2}'".format("{date_field}",d.from_date,d.to_date) for d in self.period_list])
-		date_field_filters = date_field_filters.format(date_field=self.date_field)
-
-		self.entries = frappe.db.sql("""
-			select {entity_field}, s.{value_field}, s.{date_field}
-			from `tab{doctype}` s where s.docstatus = 1 and s.company = %(company)s and ({date_field_filters})
-		"""
-		.format(entity_field=entity_field, date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document, date_field_filters=date_field_filters),
-		filters, as_dict=1)
-
-		self.get_groups()
-
-	def get_sales_transactions_based_on_item_group(self):
-		if self.filters["based_on_field"] == 'Value':
-			value_field = "base_amount"
-		else:
-			value_field = "qty"
-
-		filters = {
-			"docstatus": 1,
-			"sales_order_invoice": self.filters.postting_date,
-			self.date_field: ('between', [self.filters.from_date, self.filters.to_date])
-		}
-
-		date_field_filters = " OR ".join([ "s.{0} BETWEEN '{1}' AND '{2}'".format("{date_field}",d.from_date,d.to_date) for d in self.period_list])
-		date_field_filters = date_field_filters.format(date_field=self.date_field)
-
-		self.entries = frappe.db.sql("""
-			select it.item_group as entity, i.{value_field} as value_field, s.{date_field}
-			from `tab{doctype} Item` i , `tab{doctype}` s , `tabItem` it
-			where s.name = i.parent and i.item_code = it.name and i.docstatus = 1 and s.company = %s
-			and ({date_field_filters})
-		""".format(date_field_filters=date_field_filters,date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document),
-		(self.filters.company), as_dict=1)
-
-		self.get_groups()
-
-	def get_rows(self):
-		self.data = []
-		self.get_periodic_data()
-
-		for entity, period_data in iteritems(self.entity_periodic_data):
-			row = {
-				"entity": entity,
-				"entity_name": self.entity_names.get(entity)
-			}
-			total = 0
-			for end_date in self.periodic_daterange:
-				period = self.get_period(end_date)
-				amount = flt(period_data.get(period, 0.0))
-				row[scrub(period)] = amount
-				total += amount
-
-			row["total"] = total
-
-			if self.filters.tree_type == "Item":
-				row["stock_uom"] = period_data.get("stock_uom")
-
-			self.data.append(row)
-
-	def get_rows_by_group(self):
-		self.get_periodic_data()
-		out = []
-
-		for d in reversed(self.group_entries):
-			row = {
-				"entity": d.name,
-				"indent": self.depth_map.get(d.name)
-			}
-			total = 0
-			for end_date in self.periodic_daterange:
-				period = self.get_period(end_date)
-				amount = flt(self.entity_periodic_data.get(d.name, {}).get(period, 0.0))
-				row[scrub(period)] = amount
-				if d.parent and (self.filters.tree_type != "Order Type" or d.parent == "Order Types"):
-					self.entity_periodic_data.setdefault(d.parent, frappe._dict()).setdefault(period, 0.0)
-					self.entity_periodic_data[d.parent][period] += amount
-				total += amount
-
-			row["total"] = total
-			out = [row] + out
-
-		self.data = out
-
-	def get_periodic_data(self):
-		self.entity_periodic_data = frappe._dict()
-
-		for d in self.entries:
-			if self.filters.tree_type == "Supplier Group":
-				d.entity = self.parent_child_map.get(d.entity)
-			period = self.get_period(d.get(self.date_field))
-			self.entity_periodic_data.setdefault(d.entity, frappe._dict()).setdefault(period, 0.0)
-			self.entity_periodic_data[d.entity][period] += flt(d.value_field)
-
-			if self.filters.tree_type == "Item":
-				self.entity_periodic_data[d.entity]['stock_uom'] = d.stock_uom
-
-	def get_period(self, posting_date):
-		if self.filters.periodicity == 'Weekly':
-			period = "Week " + str(posting_date.isocalendar()[1]) + " " + str(posting_date.year)
-		elif self.filters.periodicity == 'Monthly':
-			period = str(self.months[posting_date.month - 1]) + " " + str(posting_date.year)
-		elif self.filters.periodicity == 'Quarterly':
-			period = "Quarter " + str(((posting_date.month - 1) // 3) + 1) + " " + str(posting_date.year)
-		else:
-			year = get_fiscal_year(posting_date, company=self.filters.company)
-			period = str(year[0])
-		return period
-
-	def get_period_date_ranges(self):
-		from dateutil.relativedelta import relativedelta, MO
-		from_date, to_date = getdate(self.filters.from_date), getdate(self.filters.to_date)
-		from_date = add_years(self.filters.from_date, cint(self.filters.no_of_years) * -1)
-
-		increment = {
-			"Monthly": 1,
-			"Quarterly": 3,
-			"Half-Yearly": 6,
-			"Yearly": 12
-		}.get(self.filters.periodicity, 1)
-
-		if self.filters.periodicity in ['Monthly', 'Quarterly']:
-			from_date = getdate(from_date).replace(day=1)
-		elif self.filters.periodicity == "Yearly":
-			from_date = get_fiscal_year(from_date)[1]
-		else:
-			from_date = from_date + relativedelta(from_date, weekday=MO(-1))
-
-		self.periodic_daterange = []
-		for dummy in range(1, 53):
-			if self.filters.periodicity == "Weekly":
-				period_end_date = add_days(from_date, 6)
-			else:
-				period_end_date = add_to_date(from_date, months=increment, days=-1)
-
-			if period_end_date > to_date:
-				period_end_date = to_date
-
-			self.periodic_daterange.append(period_end_date)
-
-			from_date = add_days(period_end_date, 1)
-			if period_end_date == to_date:
-				break
-
-	def get_groups(self):
-		if self.filters.tree_type == "Territory":
-			parent = 'parent_territory'
-		if self.filters.tree_type == "Customer Group":
-			parent = 'parent_customer_group'
-		if self.filters.tree_type == "Item Group":
-			parent = 'parent_item_group'
-		if self.filters.tree_type == "Supplier Group":
-			parent = 'parent_supplier_group'
-
-		self.depth_map = frappe._dict()
-
-		self.group_entries = frappe.db.sql("""select name, lft, rgt , {parent} as parent
-			from `tab{tree}` order by lft"""
-		.format(tree=self.filters.tree_type, parent=parent), as_dict=1)
-
-		for d in self.group_entries:
-			if d.parent:
-				self.depth_map.setdefault(d.name, self.depth_map.get(d.parent) + 1)
-			else:
-				self.depth_map.setdefault(d.name, 0)
-
-	def get_teams(self):
-		self.depth_map = frappe._dict()
-
-		self.group_entries = frappe.db.sql(""" select * from (select "Order Types" as name, 0 as lft,
-			2 as rgt, '' as parent union select distinct order_type as name, 1 as lft, 1 as rgt, "Order Types" as parent
-			from `tab{doctype}` where ifnull(order_type, '') != '') as b order by lft, name
-		"""
-		.format(doctype=self.filters.based_on_document), as_dict=1)
-
-		for d in self.group_entries:
-			if d.parent:
-				self.depth_map.setdefault(d.name, self.depth_map.get(d.parent) + 1)
-			else:
-				self.depth_map.setdefault(d.name, 0)
-
-	def get_supplier_parent_child_map(self):
-		self.parent_child_map = frappe._dict(frappe.db.sql(""" select name, supplier_group from `tabSupplier`"""))
-
-	def get_chart_data(self):
-		length = len(self.columns)
-
-		if self.filters.tree_type in ["Customer", "Supplier"]:
-			labels = [d.get("label") for d in self.columns[2:length - 1]]
-		elif self.filters.tree_type == "Item":
-			labels = [d.get("label") for d in self.columns[3:length - 1]]
-		else:
-			labels = [d.get("label") for d in self.columns[1:length - 1]]
-		self.chart = {
-			"data": {
-				'labels': labels,
-				'datasets': []
-			},
-			"type": "line"
-		}
+	},
+}
