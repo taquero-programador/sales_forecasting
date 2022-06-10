@@ -245,13 +245,22 @@ class Forecasting(object):
 		else:
 			value_field = "qty"
 
+		filters = {
+			"docstatus": 1,
+			"sales_order_invoice": self.filters.postting_date,
+			self.date_field: ('between', [self.filters.from_date, self.filters.to_date])
+		}
+
+		date_field_filters = " OR ".join([ "s.{0} BETWEEN '{1}' AND '{2}'".format("{date_field}",d.from_date,d.to_date) for d in self.period_list])
+		date_field_filters = date_field_filters.format(date_field=self.date_field)
+
 		self.entries = frappe.db.sql("""
 			select it.item_group as entity, i.{value_field} as value_field, s.{date_field}
 			from `tab{doctype} Item` i , `tab{doctype}` s , `tabItem` it
 			where s.name = i.parent and i.item_code = it.name and i.docstatus = 1 and s.company = %s
-			and s.{date_field} between %s and %s
-		""".format(date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document),
-		(self.filters.company, self.filters.from_date, self.filters.to_date), as_dict=1)
+			and ({date_field_filters})
+		""".format(date_field_filters=date_field_filters,date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document),
+		(self.filters.company), as_dict=1)
 
 		self.get_groups()
 
