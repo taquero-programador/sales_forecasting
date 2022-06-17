@@ -716,7 +716,7 @@ class Forecasting(ExponentialSmoothingForecast):
         self.forecast_period = []
         for end_date in self.periodic_daterange:
             for i in self.data:
-                if self.filters.periodicity in ["Yearly", 'Quarterly']:
+                if self.filters.periodicity in ["Yearly", 'Half-Yearly']:
                     print(i)
                     period = self.get_period(end_date)
                     period_name = "{0}_projected".format(period)
@@ -725,7 +725,7 @@ class Forecasting(ExponentialSmoothingForecast):
                         self.normal_period.append(i[period])
                     elif i[period_name] not in self.forecast_period and i[period_name] != 0:
                         self.forecast_period.append(i[period_name])
-                elif self.filters.periodicity in ['Monthly', 'Quarterly']:
+                elif self.filters.periodicity in ['Monthly']:
                     print(i)
 
         print(self.normal_period)
