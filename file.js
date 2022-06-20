@@ -218,25 +218,30 @@ frappe.query_reports["Sales Forecasting"] = {
 			checkboxColumn: true,
 			events: {
 				onCheckRow: function(data) {
-					// row_name contiene todos los registros
+					// toma el valor de la columna 2, comienza desde cero
 					row_name = data[2].content;
 					length = data.length;
+					// crea los arguentos para iniciar y tomar los datos de las columnas
 					let real_columns = {"first":3,"last": 3 + ((length - 3)/2)-1};
-					console.log(real_columns)
 					let projected_columns = {"first":real_columns.last + 1 ,"last": length};
 					var tree_type = frappe.query_report.filters[0].value;
 
+					// crea los prefijos para los encabezdos
 					let real_sufix = " " + __("Actual");
 					let projected_sufix = " " + __("Projected");
 					if (frappe.query_report.get_filter_value("method") == "deflation") {
 						projected_sufix = " " + __("Deflated");
 					}
 
+					// cambia los prefijos y el rango de columnas a tomar cuando sea customer o item
 					if(tree_type == "Customer") {
 						real_columns = {"first":4,"last": 4 + ((length - 4)/2)-1};
+						console.log("items rep", real_columns)
             projected_columns = {"first":real_columns.last + 1 ,"last": length};
+						console.log("cols rep", projected_columns)
 					} else if (tree_type == "Item") {
 						real_columns = {"first":5,"last": 5 + ((length - 5)/2)-1};
+						console.log("items", real_columns)
 						projected_columns = {"first":real_columns.last + 1 ,"last": length};
 					}
 
