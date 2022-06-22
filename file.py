@@ -184,18 +184,44 @@ class Forecasting(ExponentialSmoothingForecast):
                 "label": _(period),
                 "fieldname": scrub(period),
                 "fieldtype": self.fieldtype,
-                "width": 120
+                "width": 150
             })
 
         for end_date in self.periodic_daterange:
             period = self.get_period(end_date)
             period_name = "{0}_projected".format(period)
+            sufix = _("Forecast")
+            if self.filters.method == "deflation":
+                sufix = _("Deflated")
+ 
             self.columns.append({
-                "label": _(period) + " " + _("(Forecast)"),
+                "label": _(period) + " (" + sufix + ")",
                 "fieldname": scrub(period_name),
                 "fieldtype": self.fieldtype,
-                "width": 120
+                "width": 150
             })
+
+        for end_date in self.periodic_daterange:
+            period = self.get_period(end_date)
+            pname = "{0}".format("total_percent")
+            sufix = _("Porcentaje")
+            self.columns.append({
+                "label": _(period),
+                "fieldname": scrub(pname),
+                "fieldtype": "Percentage",
+                "width": 80
+            })
+
+        # for end_date in self.periodic_daterange:
+        #     period = self.get_period(end_date)
+        #     pperiod_name = "{0}".format("total_percent")
+        #     self.columns.append({
+        #         "label": _(period) + " " + "Percentage",
+        #         "filename": scrub(period),
+        #         "fieldtype": self.fieldtype,
+        #         "width": 150
+        #         })
+        # print("cols", self.columns)
 
         #self.columns.append({
         #   "label": _("Total"),
@@ -308,14 +334,14 @@ class Forecasting(ExponentialSmoothingForecast):
             entity = "supplier as entity"
             entity_name = "supplier_name as entity_name"
 
-        self.entries = frappe.get_all(self.filters.based_on_document,
-            fields=[entity, entity_name, value_field, self.date_field],
-            filters={
-                "docstatus": 1,
-                "company": self.filters.company,
-                self.date_field: ('between', [self.filters.from_date, self.filters.to_date])
-            }
-        )
+        #self.entries = frappe.get_all(self.filters.based_on_document,
+        #   fields=[entity, entity_name, value_field, self.date_field],
+        #   filters={
+        #       "docstatus": 1,
+        #       "company": self.filters.company,
+        #       self.date_field: ('between', [self.filters.from_date, self.filters.to_date])
+        #   }
+        #)
 
         self.entity_names = {}
         for d in self.entries:
@@ -323,75 +349,24 @@ class Forecasting(ExponentialSmoothingForecast):
 
     def get_sales_transactions_based_on_items(self):
 
-        if self.filters["based_on_field"] == 'Value':
-            value_field = 'base_amount'
-        else:
-            value_field = 'stock_qty'
+        #if self.filters["based_on_field"] == 'Value':
+        #   value_field = 'base_amount'
+        #else:
+        #   value_field = 'stock_qty'
 
-        conditions = ""
-        if self.filters.get("customer_group",None):
-            lft,rgt = frappe.get_value("Customer Group",self.filters.get("customer_group",None),['lft','rgt'])
-            conditions = "AND s.customer IN (SELECT name from `tabCustomer` WHERE customer_group IN (SELECT name from `tabCustomer Group` where lft>={0} and rgt<={1}))".format(lft,rgt)
+        #conditions = ""
+        #if self.filters.get("customer_group",None):
+        #   lft,rgt = frappe.get_value("Customer Group",self.filters.get("customer_group",None),['lft','rgt'])
+        #   conditions = "AND s.customer IN (SELECT name from `tabCustomer` WHERE customer_group IN (SELECT name from `tabCustomer Group` where lft>={0} and rgt<={1}))".format(lft,rgt)
 
-        if self.filters.get("customer",None):
-            conditions += " AND s.customer = '{0}'".format(self.filters.get("customer",None))
+        #if self.filters.get("customer",None):
+        #   conditions += " AND s.customer = '{0}'".format(self.filters.get("customer",None))
 
+        #if self.filters.based_on_document == 'Sales Invoice':
+        #   conditions += " AND s.return_reason NOT IN ('Acuerdo efectivo')"
 
-        if self.filters.based_on_document == 'Sales Invoice':
-            conditions += " AND s.return_reason NOT IN ('Acuerdo efectivo')"
-
-        date_field_filters = " OR ".join([ "s.{0} BETWEEN '{1}' AND '{2}'".format("{date_field}",d.from_date,d.to_date) for d in self.period_list])
-        date_field_filters = date_field_filters.format(date_field=self.date_field)
-
-
-        #self.entries = frappe.db.sql("""
-        #   select i.item_code as entity, i.item_name as entity_name, i.stock_uom, i.{value_field} as value_field, s.{date_field}
-        #   from `tab{doctype} Item` i , `tab{doctype}` s
-        #   where s.name = i.parent and i.docstatus = 1 and s.company = %s {conditions}
-        #   and s.{date_field} between %s and %s
-        #"""
-        #.format(date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document, conditions=conditions),
-        #(self.filters.company, self.filters.from_date, self.filters.to_date), as_dict=1)
-
-        self.entries = frappe.db.sql("""
-            WITH cte AS (
-            SELECT 
-                si.item_code as entity,
-                si.item_name as entity_name,
-                si.stock_uom,
-                s.{date_field},
-                s.customer,
-                YEAR(s.{date_field}) AS y,
-                MONTH(s.{date_field}) AS m,
-                WEEK(s.{date_field}) AS w,
-                SUM(si.{value_field}) AS value_field,
-                SUM(si.qty) AS qty,
-                SUM(si.base_amount) AS amount,
-                MIN(si.base_rate) AS min_rate,
-                MAX(si.base_rate) AS max_rate,
-                AVG(si.base_rate) AS avg_rate,
-                FIRST_VALUE(AVG(si.base_rate)) OVER (PARTITION BY s.customer,si.item_code ORDER BY s.{date_field}) AS oldest_avg_rate
-
-            FROM
-                `tab{doctype} Item` si
-                    LEFT JOIN
-                `tab{doctype}` s ON (si.parent = s.name)
-            WHERE
-                s.docstatus = 1 
-                    AND s.company = %(company)s
-                    AND ({date_field_filters}) {conditions}
-            GROUP BY s.customer , si.item_code , y, m, w
-            )
-            SELECT
-                *,
-                qty * oldest_avg_rate AS projected_amount,
-                (avg_rate - oldest_avg_rate) / avg_rate * 100 AS percent
-            FROM
-                cte
-        """
-        .format(date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document, date_field_filters=date_field_filters, conditions=conditions),
-        self.filters, as_dict=1)
-
+        #date_field_filters = " OR ".join([ "s.{0} BETWEEN '{1}' AND '{2}'".format("{date_field}",d.from_date,d.to_date) for d in self.period_list])
+        #date_field_filters = date_field_filters.format(date_field=self.date_field)
 
         self.entity_names = {}
         for d in self.entries:
@@ -444,12 +419,17 @@ class Forecasting(ExponentialSmoothingForecast):
         else:
             if self.filters.based_on_document == 'Sales Invoice':
                 #value_field = 'SUM(IF(IFNULL(s.is_return,0) = 1 AND IFNULL(s.return_reason,"") NOT IN ("Devolución","Refacturación"), 0, si.stock_qty))'
-                value_field = 'SUM(IF(IFNULL(s.is_return,0) = 1 AND IFNULL(s.return_reason,"") NOT IN ("Devolución"), 0, si.stock_qty))'
+                value_field = 'SUM(IF(IFNULL(s.is_return,0) = 1 AND IFNULL(s.return_reason,"") NOT IN ("Devolución","Refacturación"), 0, si.stock_qty))'
             else:
                 value_field = 'SUM(si.stock_qty)'
 
+        entity_name = ""
+
         if self.filters.tree_type == 'Customer Group':
             entity_field = 'c.customer_group'
+            if self.filters.customer_group:
+                entity_field = 'si.item_code'
+                entity_name = "i.item_name AS entity_name,"
         elif self.filters.tree_type == 'Supplier Group':
             entity_field = "supplier"
             self.get_supplier_parent_child_map()
@@ -457,8 +437,17 @@ class Forecasting(ExponentialSmoothingForecast):
             entity_field = "i.item_group"
         elif self.filters.tree_type == 'Sales Person':
             entity_field = 'c.sales_agent'
+        elif self.filters.tree_type == 'Item':
+            entity_field = 'si.item_code'
+            entity_name = "i.item_name AS entity_name,"
+        elif self.filters.tree_type == 'Customer':
+            entity_field = "c.name"
+            entity_name = "c.customer_name AS entity_name,"
+            if self.filters.customer:
+                entity_field = 'si.item_code'
+                entity_name = "i.item_name AS entity_name,"
         else:
-            entity_field = "si.territory"
+            entity_field = "c.territory"
 
         filters = {
             "docstatus": 1,
@@ -472,6 +461,14 @@ class Forecasting(ExponentialSmoothingForecast):
             additional_filters += ' AND IFNULL(s.return_reason,"") NOT IN ("Acuerdo efectivo")'
             qty_field = 'SUM(IF(IFNULL(s.is_return,0) = 1 AND IFNULL(s.return_reason,"") NOT IN ("Devolución"), 0, si.stock_qty))'
 
+        if self.filters.get("customer_group",None):
+            lft,rgt = frappe.get_value("Customer Group",self.filters.get("customer_group",None),['lft','rgt'])
+            additional_filters += " AND s.customer IN (SELECT name from `tabCustomer` WHERE customer_group IN (SELECT name from `tabCustomer Group` where lft>={0} and rgt<={1}))".format(lft,rgt)
+
+        if self.filters.get("customer",None):
+            additional_filters += " AND s.customer = '{0}'".format(self.filters.get("customer",None))
+
+
         date_field_filters = " OR ".join([ "s.{0} BETWEEN '{1}' AND '{2}'".format("{date_field}",d.from_date,d.to_date) for d in self.period_list])
         date_field_filters = date_field_filters.format(date_field=self.date_field)
 
@@ -480,12 +477,15 @@ class Forecasting(ExponentialSmoothingForecast):
             SELECT 
                 {entity_field} AS entity,
                 {value_field} AS value_field,
+                {entity_name}
                 s.{date_field},
                 s.customer,
                 c.sales_agent,
                 c.customer_group,
+                c.territory,
                 si.item_code,
                 i.item_group,
+                i.stock_uom,
                 YEAR(s.{date_field}) AS y,
                 MONTH(s.{date_field}) AS m,
                 WEEK(s.{date_field}) AS w,
@@ -506,8 +506,8 @@ class Forecasting(ExponentialSmoothingForecast):
                 `tabItem` i ON (si.item_code = i.name)
             WHERE
                 s.docstatus = 1 AND si.item_code = 'P126900' AND s.customer IN ('C1009' , 'C5031')
-                    AND s.company = %(company)s
-                    AND ({date_field_filters}) {additional_filters}
+                AND s.company = %(company)s
+                AND ({date_field_filters}) {additional_filters}
             GROUP BY s.customer , si.item_code , y, m, w
             )
             SELECT 
@@ -517,8 +517,11 @@ class Forecasting(ExponentialSmoothingForecast):
             FROM
                 cte
         """
-        .format(entity_field=entity_field, date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document, date_field_filters=date_field_filters,additional_filters=additional_filters,qty_field=qty_field),
+        .format(entity_field=entity_field, date_field=self.date_field, value_field=value_field, doctype=self.filters.based_on_document, date_field_filters=date_field_filters,additional_filters=additional_filters,qty_field=qty_field,entity_name=entity_name),
         filters, as_dict=1)
+
+        # for e in self.entries:
+        #     print(e.percent)
 
 
     def get_rows(self):
@@ -531,13 +534,29 @@ class Forecasting(ExponentialSmoothingForecast):
                 "entity_name": self.entity_names.get(entity)
             }
             total = 0
+            total_projected = 0
+            total_porcent = 0
+
             for end_date in self.periodic_daterange:
                 period = self.get_period(end_date)
+                fperiod = "{0}_projected".format(period)
+                pporcent = "{0}".format("percent")
+                
                 amount = flt(period_data.get(period, 0.0))
+                pamount = flt(period_data.get(fperiod, 0.0))
+                percent_ = flt(period_data.get(pporcent, 0.0))
+
                 row[scrub(period)] = amount
+                row[scrub(fperiod)] = pamount
+                row[scrub(pporcent)] = percent_
+
                 total += amount
+                total_projected += pamount
+                total_porcent += percent_
 
             row["total"] = total
+            row["total_projected"] = total_projected
+            row['total_percent'] = total_porcent
 
             if self.filters.tree_type == "Item":
                 row["stock_uom"] = period_data.get("stock_uom")
@@ -545,8 +564,11 @@ class Forecasting(ExponentialSmoothingForecast):
             self.data.append(row)
 
     def get_rows_by_group(self):
-        self.get_periodic_data()
+        # funcion para obtener los grupos
+        # antes de, manda llamar a la funcion de abajo para obtener valores
+        self.get_periodic_data() 
         out = []
+
         for d in reversed(self.group_entries):
             row = {
                 "entity": d.name,
@@ -554,43 +576,65 @@ class Forecasting(ExponentialSmoothingForecast):
             }
             total = 0
             total_projected = 0
+            percent = 0
             for end_date in self.periodic_daterange:
                 period = self.get_period(end_date)
                 fperiod = "{0}_projected".format(period)
+                pperiod = "{0}".format("percent")
+                # print(pperiod)
                 amount = flt(self.entity_periodic_data.get(d.name, {}).get(period, 0.0))
                 pamount = flt(self.entity_periodic_data.get(d.name, {}).get(fperiod, 0.0))
+                percent_ = flt(self.entity_periodic_data.get(d.name, {}).get(pperiod, 0.0))
+                print(percent_)
                 row[scrub(period)] = amount
                 row[scrub(fperiod)] = pamount
+                row[scrub(pperiod)] = percent_
                 if d.parent and (self.filters.tree_type != "Order Type" or d.parent == "Order Types"):
                     self.entity_periodic_data.setdefault(d.parent, frappe._dict()).setdefault(period, 0.0)
                     self.entity_periodic_data[d.parent][period] += amount
                     self.entity_periodic_data.setdefault(d.parent, frappe._dict()).setdefault(fperiod, 0.0)
                     self.entity_periodic_data[d.parent][fperiod] += pamount
+                    self.entity_periodic_data.setdefault(d.parent, frappe._dict()).setdefault("{0}".format("percent"), 0.0)
+                    self.entity_periodic_data[d.parent]["{0}".format("percent")] += percent_
+
+
 
                 total += amount
-                total_projected += pamount
+                total_projected = pamount
+                percent += percent_
 
             row["total"] = total
             row["total_projected"] = total_projected
+            row["total_percent"] = percent / (len(self.entity_periodic_data) if len(self.entity_periodic_data) > 0 else 1)
             out = [row] + out
 
+        # print("TR", self.entity_periodic_data)
         self.data = out
+        for i in out:
+            print(i)
 
     def get_periodic_data(self):
+        # este obtiene todo es self.entries
         self.entity_periodic_data = frappe._dict()
-
+        # for e in self.entries:
+        #     print(e)
+        # print(self.entity_periodic_data)
 
         for d in self.entries:
+            # print(d)
             if self.filters.tree_type == "Supplier Group":
                 d.entity = self.parent_child_map.get(d.entity)
             period = self.get_period(d.get(self.date_field))
             self.entity_periodic_data.setdefault(d.entity, frappe._dict()).setdefault(period, 0.0)
             self.entity_periodic_data.setdefault(d.entity, frappe._dict()).setdefault("{0}_projected".format(period), 0.0)
+            self.entity_periodic_data.setdefault(d.entity, frappe._dict()).setdefault("{0}".format("percent"), 0.0)
             self.entity_periodic_data[d.entity][period] += flt(d.value_field)
             self.entity_periodic_data[d.entity]["{0}_projected".format(period)] += flt(d.projected)
+            self.entity_periodic_data[d.entity]["{0}".format("percent")] += flt(d.percent)
 
             if self.filters.tree_type == "Item":
                 self.entity_periodic_data[d.entity]['stock_uom'] = d.stock_uom
+
 
     def get_period(self, posting_date):
         if self.filters.periodicity == 'Weekly':
@@ -692,60 +736,48 @@ class Forecasting(ExponentialSmoothingForecast):
         self.parent_child_map = frappe._dict(frappe.db.sql(""" select name, supplier_group from `tabSupplier`"""))
 
     def get_chart_data(self):
-        labels = []
-        data_labels = []
-        self.total_demand = []
-        self.total_forecast = []
-        self.total_history_forecast = []
-        self.total_future_forecast = []
+        length = len(self.columns)
+        last = cint((length - 1) /3)
 
-        # length = len(self.columns)
+        if self.filters.tree_type in ["Customer", "Supplier"]:
+            last = cint((length - 2) /3)
+            labels = [d.get("label") for d in self.columns[2:last + 2]]
+        elif self.filters.tree_type == "Item":
+            last = cint((length - 3) /3)
+            labels = [d.get("label") for d in self.columns[3:last + 3]]
+        else:
+            labels = [d.get("label") for d in self.columns[1:last + 1]]
 
-        # if self.filters.tree_type in ["Customer", "Supplier"]:
-        #     labels = [d.get("label") for d in self.columns[2:length - 1]]
-        # elif self.filters.tree_type == "Item":
-        #     labels = [d.get("label") for d in self.columns[3:length - 1]]
-        # else:
-        #     labels = [d.get("label") for d in self.columns[1:length - 1]]
-
-        for period in self.period_list:
-            forecast_key = period.key + 'projected'
-            data_labels.append(_(period.key))
-
-        self.normal_period = []
-        self.forecast_period = []
-        for end_date in self.periodic_daterange:
-            for i in self.data:
-                if self.filters.periodicity in ["Yearly", 'Half-Yearly']:
-                    print(i)
-                    period = self.get_period(end_date)
-                    period_name = "{0}_projected".format(period)
-                    if i[period] not in self.normal_period and i[period] != 0:
-                        print(i[period])
-                        self.normal_period.append(i[period])
-                    elif i[period_name] not in self.forecast_period and i[period_name] != 0:
-                        self.forecast_period.append(i[period_name])
-                elif self.filters.periodicity in ['Monthly']:
-                    print(i)
-
-        print(self.normal_period)
-        print(self.forecast_period)
-
+        
 
         self.chart = {
             "data": {
-                "labels": data_labels,
+                'labels': labels,
+                'datasets': [
+                ]
+            },
+            "type": "line"
+        }
+
+        self.chart2 = {
+            "data": {
+                "labels": ["12am-3am", "3am-6am", "6am-9am", "9am-12pm","12pm-3pm", "3pm-6pm", "6pm-9pm", "9pm-12am"],
                 "datasets": [
                     {
-                        "name": "Real",
+                        "name": "Some Data",
                         "chartType": 'line',
-                        "values": [n for n in self.normal_period]
+                        "values": [25, 40, 30, 35, 8, 52, 17, -4]
                     },
                     {
-                        "name": "Forecast",
+                        "name": "Another Set",
                         "chartType": 'line',
-                        "values": [n for n in self.forecast_period]
+                        "values": [25, 50, -10, 15, 18, 32, 27, 14]
                     },
+                    {
+                        "name": "Yet Another",
+                        "chartType": 'line',
+                        "values": [15, 20, -3, -15, 58, 12, -17, 37]
+                    }
                 ],
 
                 "yMarkers": [{
@@ -761,7 +793,7 @@ class Forecasting(ExponentialSmoothingForecast):
                     "options": { "labelPos": 'right' }
                 }],
             },
-            "title": "Sales Forecasting",
+            "title": "My Awesome Chart",
             "type": 'axis-mixed', # // or 'bar', 'line', 'pie', 'percentage'
             "height": 600,
             "colors": ['purple', '#ffa3ef', 'light-blue'],
@@ -831,5 +863,3 @@ class Forecasting(ExponentialSmoothingForecast):
                 "datatype": self.fieldtype,
             },
         ]
-
-
