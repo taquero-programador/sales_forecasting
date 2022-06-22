@@ -222,8 +222,10 @@ frappe.query_reports["Sales Forecasting"] = {
 					row_name = data[2].content;
 					length = data.length;
 					// crea los arguentos para iniciar y tomar los datos de las columnas
-					let real_columns = {"first":3,"last": 3 + ((length - 3)/2)-1};
+					let real_columns = {"first":3,"last": 3 + ((length - 3)/3)-1};
+					// console.log("real", real_columns)
 					let projected_columns = {"first":real_columns.last + 1 ,"last": length};
+					// console.log("pro", projected_columns)
 					var tree_type = frappe.query_report.filters[0].value;
 
 					// crea los prefijos para los encabezdos
@@ -235,13 +237,12 @@ frappe.query_reports["Sales Forecasting"] = {
 
 					// cambia los prefijos y el rango de columnas a tomar cuando sea customer o item
 					if(tree_type == "Customer") {
-						real_columns = {"first":4,"last": 4 + ((length - 4)/2)-1};
-						console.log("items rep", real_columns)
+						real_columns = {"first":4,"last": 4 + ((length - 4)/3)-1};
+						console.log("real", real_columns)
             projected_columns = {"first":real_columns.last + 1 ,"last": length};
-						console.log("cols rep", projected_columns)
+            console.log("proj", projected_columns)
 					} else if (tree_type == "Item") {
-						real_columns = {"first":5,"last": 5 + ((length - 5)/2)-1};
-						console.log("items", real_columns)
+						real_columns = {"first":5,"last": 5 + ((length - 5)/3)-1};
 						projected_columns = {"first":real_columns.last + 1 ,"last": length};
 					}
 
