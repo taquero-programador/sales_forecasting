@@ -1,0 +1,38 @@
+    {
+     "add_total_row": 1,
+     "columns": [],
+     "creation": "2022-05-19 16:17:41.870702",
+     "disable_prepared_report": 1,
+     "disabled": 0,
+     "docstatus": 0,
+     "doctype": "Report",
+     "filters": [],
+     "idx": 0,
+     "is_standard": "Yes",
+     "letter_head": "Valsa",
+     "modified": "2022-06-28 10:25:18.511423",
+     "modified_by": "Administrator",
+     "module": "Selling Reports",
+     "name": "Sales Forecasting",
+     "owner": "Administrator",
+     "prepared_report": 0,
+     "ref_doctype": "Sales Invoice",
+     "refresh_on_context_change": 0,
+     "report_name": "Sales Forecasting",
+     "report_type": "Script Report",
+     "roles": [
+      {
+       "role": "Stock User"
+      },
+      {
+       "role": "Maintenance User"
+      },
+      {
+       "role": "Accounts User"
+      },
+      {
+       "role": "Sales Manager"
+      }
+     ]
+    }
+
