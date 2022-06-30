@@ -111,6 +111,23 @@ frappe.query_reports["Sales Forecasting"] = {
       "reqd": 1
     },
 		{
+      "fieldname":"reference_value",
+      "label": __("Reference Value"),
+      "fieldtype": "Select",
+      "options": [
+				{
+					"value": "oldest",
+					"label": __("Oldest"),
+				},
+				{
+          "value": "latest",
+          "label": __("Latest"),
+        }
+			],
+      "default": "latest",
+      "reqd": 1
+    },
+		{
       "label": __("Customer Group"),
       "fieldname": "customer_group",
       "fieldtype": "Link",
@@ -210,7 +227,6 @@ frappe.query_reports["Sales Forecasting"] = {
 		}
   },
 	after_datatable_render: function(datatable_obj) {
-		// funcion habilitada para que en automatico selecione la primera fila y la muestre en la grafica
 		$(datatable_obj.wrapper).find(".dt-row-0").find('input[type=checkbox]').click();
 	},
 	get_datatable_options(options) {
@@ -218,32 +234,28 @@ frappe.query_reports["Sales Forecasting"] = {
 			checkboxColumn: true,
 			events: {
 				onCheckRow: function(data) {
-					// toma el valor de la columna 2, comienza desde cero
-					row_name = data[2].content;
-					length = data.length;
-					// crea los arguentos para iniciar y tomar los datos de las columnas
-					let real_columns = {"first":3,"last": 3 + ((length - 3)/3)-1};
-					// console.log("real", real_columns)
-					let projected_columns = {"first":real_columns.last + 1 ,"last": length};
-					// console.log("pro", projected_columns)
+					let row_name = data[2].content;
+					let length = data.length;
+					let data_columns_length = (length - 3+2)/4;
+					
+					let real_columns = {"first":3,"last": 3 + data_columns_length -1};
+					let projected_columns = {"first":real_columns.last + data_columns_length, "last": length - (data_columns_length - 1)};
 					var tree_type = frappe.query_report.filters[0].value;
 
-					// crea los prefijos para los encabezdos
 					let real_sufix = " " + __("Actual");
 					let projected_sufix = " " + __("Projected");
 					if (frappe.query_report.get_filter_value("method") == "deflation") {
 						projected_sufix = " " + __("Deflated");
 					}
 
-					// cambia los prefijos y el rango de columnas a tomar cuando sea customer o item
 					if(tree_type == "Customer") {
-						real_columns = {"first":4,"last": 4 + ((length - 4)/3)-1};
-						console.log("real", real_columns)
-            projected_columns = {"first":real_columns.last + 1 ,"last": length};
-            console.log("proj", projected_columns)
+						data_columns_length = (length - 4+2)/4;
+						real_columns = {"first":4,"last": 4 + data_columns_length - 1};
+            projected_columns = {"first":real_columns.last + data_columns_length, "last": length - (data_columns_length - 1)};
 					} else if (tree_type == "Item") {
-						real_columns = {"first":5,"last": 5 + ((length - 5)/3)-1};
-						projected_columns = {"first":real_columns.last + 1 ,"last": length};
+						data_columns_length =(length - 5+2)/4;
+						real_columns = {"first":5,"last": 5 + data_columns_length - 1};
+						projected_columns = {"first":real_columns.last + data_columns_length, "last": length - (data_columns_length - 1)};
 					}
 
 					row_values = data.slice(real_columns.first,real_columns.last+1).map(function (column) {
